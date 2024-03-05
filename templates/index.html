@@ -1,67 +1,52 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Voice Analysis</title>
-</head>
-<body>
-    <h1>Voice Analysis</h1>
-    <button id="startRecording">Start Recording</button>
-    <button id="stopRecording" disabled>Stop Recording</button>
-    <audio id="audioPlayer" controls></audio>
-    <div id="result"></div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Upload and Analyze Audio</title>
+  </head>
+  <body>
+    <h1>Upload Audio for Analysis</h1>
+    <input type="file" id="audioUpload" accept="audio/*" />
+    <button id="submitAudio" disabled>Submit Audio for Analysis</button>
+    <div id="feedbackContainer"></div>
 
     <script>
-        let mediaRecorder;
-        let audioChunks = [];
-    
-        document.getElementById('startRecording').addEventListener('click', startRecording);
-        document.getElementById('stopRecording').addEventListener('click', stopRecording);
-    
-        async function startRecording() {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorder = new MediaRecorder(stream);
-    
-            mediaRecorder.ondataavailable = (event) => {
-                if (event.data.size > 0) {
-                    audioChunks.push(event.data);
-                }
-            };
-    
-            mediaRecorder.onstop = () => {
-                const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-                const audioUrl = URL.createObjectURL(audioBlob);
-                document.getElementById('audioPlayer').src = audioUrl;
-    
-                const formData = new FormData();
-                formData.append('audio', audioBlob, 'recorded_audio.wav');
-    
-                fetch('/process_audio', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    var resultDiv = document.getElementById('result');
-                    resultDiv.innerHTML = `<p>Predicted Class: ${data.predicted_class}</p><p>${data.feedback_text}</p>`;
-                })
-                .catch(error => console.error('Error:', error));
-            };
-    
-            mediaRecorder.start();
-            document.getElementById('startRecording').disabled = true;
-            document.getElementById('stopRecording').disabled = false;
+      document.getElementById("audioUpload").addEventListener("change", function () {
+        const file = this.files[0];
+        if (file) {
+          document.getElementById("submitAudio").disabled = false;
+        } else {
+          document.getElementById("submitAudio").disabled = true;
         }
-    
-        function stopRecording() {
-            if (mediaRecorder && mediaRecorder.state === 'recording') {
-                mediaRecorder.stop();
-                document.getElementById('startRecording').disabled = false;
-                document.getElementById('stopRecording').disabled = true;
-            }
+      });
+
+      document.getElementById("submitAudio").addEventListener("click", () => {
+        const audioFile = document.getElementById("audioUpload").files[0];
+        if (!audioFile) {
+          alert("Please select an audio file first.");
+          return;
         }
+
+        const formData = new FormData();
+        formData.append("audio", audioFile, audioFile.name);
+
+        fetch("/process_audio", {
+          method: "POST",
+          body: formData,
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            console.log(data);
+            const feedbackContainer = document.getElementById("feedbackContainer");
+            feedbackContainer.innerHTML = `<h2>Analysis Feedback</h2><p>${data.feedback_text}</p>`;
+            alert("Analysis Complete. Feedback displayed below.");
+          })
+          .catch((error) => {
+            console.error("Error:", error);
+            alert("Error sending audio for analysis. See console for details.");
+          });
+      });
     </script>
-    
-</body>
+  </body>
 </html>

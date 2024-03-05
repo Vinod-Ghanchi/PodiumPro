@@ -7,20 +7,28 @@ import nltk
 from textblob import TextBlob
 import re
 import numpy as np
-import tempfile  # Import the tempfile module
+import tempfile  #Import the tempfile module
+import warnings
+warnings.filterwarnings('ignore', message='X does not have valid feature names')
 
 
 # Initialize Flask application
 app = Flask(__name__)
 
 # Load the trained SVM model and feature coefficients
+print("Loading model and coefficients...")
+
 model = joblib.load('svm2.joblib')
 feature_coefficients = joblib.load('svm2_coefficients.joblib')
+print("Model and coefficients Loaded...")
 
 def extract_audio_features(audio_file):
     """
     Extract features from the audio file, similar to the initially provided logic.
+
     """
+    print("Extracting audio features...")
+
     sample_rate = librosa.get_samplerate(audio_file)
     y, sr_librosa = librosa.load(audio_file, sr=sample_rate)
 
@@ -41,16 +49,23 @@ def extract_audio_features(audio_file):
 
     f0, voiced_flag, voiced_probs = librosa.pyin(y, fmin=librosa.note_to_hz('C2'), fmax=librosa.note_to_hz('C7'))
     average_f0 = np.nanmean(f0[f0 > 0])
+    print("Features extracted:", np.array([articulation_rate, filler_word_count, average_f0, speech_rate, speech_mood])
+)
+
 
     return np.array([articulation_rate, filler_word_count, average_f0, speech_rate, speech_mood])
 
 # Provide feedback based on the predicted class and feature coefficients
 def provide_feedback(predicted_class, feature_coefficients):
+    print("hello")
     print(feature_coefficients, predicted_class)
+    print(type(predicted_class))
+    print(predicted_class.shape)
 
-    feedback_text = f"Predicted Class: {predicted_class[0]}\n\nFeature Feedback:\n"
-
-    for feature, coefficient in feature_coefficients.items():
+    feedback_text = f"Predicted Class: {predicted_class}\n\nFeature Feedback:\n"
+    # Iterate through features (keys) and access corresponding values
+    for feature in feature_coefficients:
+        coefficient = feature_coefficients[feature]
         if feature == "Articulation Rate":
             if coefficient > 0:
                 feedback_text += f"{feature}: Your articulation rate is relatively high. This is good for clarity and precision in speech. Consider maintaining or refining this aspect.\n"
@@ -104,9 +119,9 @@ def index():
 import logging
 
 
-
 @app.route('/process_audio', methods=['POST'])
 def process_audio():
+    print("Processing audio...")
     if 'audio' not in request.files:
         logging.error('No audio file provided')
         return jsonify({'error': 'No audio file provided'})
@@ -128,13 +143,24 @@ def process_audio():
 
         try:
             new_audio_data = extract_audio_features(filepath)
-            new_audio_data = new_audio_data.reshape(1, -1)  # Reshape the input data to 2D
+            print(type(new_audio_data))
+            print(new_audio_data.shape)
+            new_audio_data.shape = (1, new_audio_data.size)
             predicted_class = model.predict(new_audio_data)
-            feedback_text = provide_feedback(predicted_class, feature_coefficients)
-            logging.info(f"Predicted Class: {predicted_class[0]}")
+
+            # Initialize feature feedback dictionary here
+            feature_feedback = {
+                "Articulation Rate": feature_coefficients['Articulation Rate'],
+                "Filler Word Count": feature_coefficients['Filler Word Count'],
+                "Average F0": feature_coefficients['Average F0'],
+                "Speech Rate": feature_coefficients['Speech Rate'],
+                "Speech Mood": feature_coefficients['Speech Mood'],
+            }
+
+            feedback_text = provide_feedback(predicted_class, feature_feedback)
+            logging.info(f"Predicted Class: {predicted_class}")
             logging.info(f"Feedback Text: {feedback_text}")
 
-            # Check if feedback_text is empty or undefined
             if not feedback_text:
                 logging.error("Feedback text is empty or undefined")
                 temp_audio_file.close()
@@ -143,7 +169,7 @@ def process_audio():
 
             temp_audio_file.close()
             os.remove(filepath)
-            return jsonify({'predicted_class': predicted_class[0], 'feedback_text': feedback_text})
+            return jsonify({'predicted_class': predicted_class.tolist(), 'feedback_text': feedback_text})
         except Exception as e:
             logging.error(f'Error processing audio file: {str(e)}')
             temp_audio_file.close()

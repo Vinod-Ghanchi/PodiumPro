@@ -1,0 +1,7 @@
+streamlit==1.29.0
+librosa
+numpy
+joblib
+SpeechRecognition
+nltk
+textblob
